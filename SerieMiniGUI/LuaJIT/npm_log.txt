@@ -1,0 +1,8 @@
+npm error code ENOENT
+npm error syscall open
+npm error path /Users/sergiorodriguez/Library/CloudStorage/GoogleDrive-ssergiorodriguezz@gmail.com/Mi unidad/Synced Folder/Prog/Lua/SerieMiniGUI/LuaJIT/package.json
+npm error errno -2
+npm error enoent Could not read package.json: Error: ENOENT: no such file or directory, open '/Users/sergiorodriguez/Library/CloudStorage/GoogleDrive-ssergiorodriguezz@gmail.com/Mi unidad/Synced Folder/Prog/Lua/SerieMiniGUI/LuaJIT/package.json'
+npm error enoent This is related to npm not being able to find a file.
+npm error enoent
+npm error A complete log of this run can be found in: /Users/sergiorodriguez/.npm/_logs/2025-12-02T22_55_58_495Z-debug-0.log

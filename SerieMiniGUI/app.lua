@@ -57,11 +57,6 @@ local function read_file(path)
 
   debug = tostring(err)
   
-  -- 2. Fallback: Try direct relative path (Development/Console mode)
-  if not f then
-      f = io.open(path, "r")
-  end
-
   -- Return nil and the path we tried if both failed
   if not f then return nil, abs_path end
   
@@ -231,7 +226,7 @@ local texts = {
     lbl_show = "Metadata to Show (Item Page)",
     lbl_index = "Metadata to Index (Search Bar)",
     btn_save = "SAVE CONFIGURATION",
-    msg_saved = "Configuration saved to data/serie.config.js!",
+    msg_saved = "Configuration saved to serie.config.js!",
     msg_loaded = "Existing configuration loaded.",
     err_csv = "Error: Not found",
     err_pid = "Error: metadata table does not contain the pid column",
@@ -357,7 +352,7 @@ function app.Load()
 
   -- 1. Load CSV (Metadata structure)
   -- Updated to capture error path for debugging
-  local content, err_path = read_file("./data/metadata.csv")
+  local content, err_path = read_file("./metadata.csv")
 
   if content then
     local parsed = csv.openstring(content)
@@ -399,7 +394,7 @@ function app.Load()
   end
 
   -- 2. Try to load existing configuration
-  local existing_config_str = read_file("./data/serie.config.js")
+  local existing_config_str = read_file("./serie.config.js")
   if existing_config_str then
     local loaded_config = parse_js_config(existing_config_str)
     
@@ -605,7 +600,7 @@ function mainGUI()
           local file_content = "const config = " .. json_output .. ";\n\nexport default config;"
 
           -- Use Bundle-Aware write
-          if write_file("./data/serie.config.js", file_content) then
+          if write_file("./serie.config.js", file_content) then
             status_msg = t.msg_saved
             status_color = { 0, 1, 0, 1 }
           else
@@ -723,11 +718,11 @@ function loadGUI()
   ig.Text("Select the data file of the project")
 
   if ig.Button("Open File") then
-    local path = nfd.Open(nil, file_filters)
+    local path = nfd.pickFolder(nil)
     if path then
       print("Selected File: " .. path)
-      BASE_PATH = path
-      --app.Load()
+      BASE_PATH = path.."/"
+      app.Load()
     end
   end
 

@@ -5176,7 +5176,7 @@ SDL_Thread * SDL_CreateThreadWithStackSizeRuntime(int ( * fn) (void *),const cha
 local libpath
 local script_dir = arg[0]:match("^(.*)/") or "."
 if ffi.os == "Windows" then -- Windows
-  libpath = "./lib/SDL3/SDL3.dll"
+  libpath = "SDL3.dll"
 elseif ffi.os == "OSX" then -- MacOS
   libpath = "libSDL3.dylib"
 else -- Linux

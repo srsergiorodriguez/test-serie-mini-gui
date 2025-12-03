@@ -30,6 +30,12 @@ ffi.cdef[[
     nfdwindowhandle_t parentWindow;
   } nfdopendialogu8args_t;
 
+  // Added for PickFolder
+  typedef struct {
+    const nfdu8char_t* defaultPath;
+    nfdwindowhandle_t parentWindow;
+  } nfdpickfolderu8args_t;
+
   typedef enum {
     NFD_ERROR,
     NFD_OKAY,
@@ -39,6 +45,8 @@ ffi.cdef[[
   // Function declarations with version parameter (use 1 for NFD_INTERFACE_VERSION)
   nfdresult_t NFD_OpenDialogU8_With_Impl(nfdversion_t version, nfdu8char_t** outPath, const nfdopendialogu8args_t* args);
   nfdresult_t NFD_SaveDialogU8_With_Impl(nfdversion_t version, nfdu8char_t** outPath, const nfdsavedialogu8args_t* args);
+  // Added for PickFolder
+  nfdresult_t NFD_PickFolderU8_With_Impl(nfdversion_t version, nfdu8char_t** outPath, const nfdpickfolderu8args_t* args);
 
   void NFD_FreePathU8(nfdu8char_t* filePath);
   const char* NFD_GetError(void);
@@ -48,7 +56,6 @@ ffi.cdef[[
 ]]
 
 local os = jit.os
-local nfdex
 local libpath
 
 local script_dir = arg[0]:match("^(.*)/") or "."
@@ -68,7 +75,8 @@ local M = {}
 function M.Init()
   local initResult = lib.NFD_Init()
   if initResult ~= ffi.C.NFD_OKAY then
-    error("Failed to initialize native file dialog: " .. ffi.string(nfdex.NFD_GetError()))
+    -- Fixed: Use lib.NFD_GetError() instead of undefined nfdex variable
+    error("Failed to initialize native file dialog: " .. ffi.string(lib.NFD_GetError()))
   end
 end
 
@@ -112,11 +120,11 @@ function M.Open(defaultPath, filters)
     -- Call NFD (Blocks execution)
     local result = lib.NFD_OpenDialogU8_With_Impl(1, outPath, args)
 
-    if result == lib.NFD_OKAY then
+    if result == ffi.C.NFD_OKAY then
         local str = ffi.string(outPath[0])
         lib.NFD_FreePathU8(outPath[0])
         return str
-    elseif result == lib.NFD_CANCEL then
+    elseif result == ffi.C.NFD_CANCEL then
         return nil
     else
         print("NFD Error: " .. ffi.string(lib.NFD_GetError()))
@@ -138,11 +146,32 @@ function M.Save(defaultPath, defaultName, filters)
     
     local result = lib.NFD_SaveDialogU8_With_Impl(1, outPath, args)
 
-    if result == lib.NFD_OKAY then
+    if result == ffi.C.NFD_OKAY then
         local str = ffi.string(outPath[0])
         lib.NFD_FreePathU8(outPath[0])
         return str
-    elseif result == lib.NFD_CANCEL then
+    elseif result == ffi.C.NFD_CANCEL then
+        return nil
+    else
+        print("NFD Error: " .. ffi.string(lib.NFD_GetError()))
+        return nil
+    end
+end
+
+function M.pickFolder(defaultPath)
+    local args = ffi.new("nfdpickfolderu8args_t")
+    args.defaultPath = defaultPath
+    args.parentWindow = {0, nil} 
+
+    local outPath = ffi.new("nfdu8char_t*[1]")
+    
+    local result = lib.NFD_PickFolderU8_With_Impl(1, outPath, args)
+
+    if result == ffi.C.NFD_OKAY then
+        local str = ffi.string(outPath[0])
+        lib.NFD_FreePathU8(outPath[0])
+        return str
+    elseif result == ffi.C.NFD_CANCEL then
         return nil
     else
         print("NFD Error: " .. ffi.string(lib.NFD_GetError()))

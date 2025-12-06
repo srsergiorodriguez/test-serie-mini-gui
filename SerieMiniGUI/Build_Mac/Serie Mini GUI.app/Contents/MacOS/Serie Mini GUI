@@ -1,0 +1,15 @@
+#!/bin/bash
+DIR="$(cd "$(dirname "$0")" && pwd)"
+RESOURCE_PATH="$DIR/../Resources"
+FRAMEWORKS_PATH="$DIR/../Frameworks"
+
+# CRITICAL FIX: Change working directory to Resources
+# This ensures require("lib...") and io.open("assets/...") work correctly.
+cd "$RESOURCE_PATH" || exit 1
+
+# Add Frameworks to library search path so ffi.load("SDL3") works by name
+export DYLD_LIBRARY_PATH="$FRAMEWORKS_PATH:$DYLD_LIBRARY_PATH"
+
+# Run LuaJIT with main.lua
+# We use 'exec' so the shell process is replaced by luajit
+exec "$DIR/luajit-bin" "main.lua"

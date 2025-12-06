@@ -1,5 +1,5 @@
 <?xml version="1.0"?>
-<image xmlns="http://www.vips.ecs.soton.ac.uk//dzsave" date="2025-12-03T14:45:48.166973-05" version="8.15.3">
+<image xmlns="http://www.vips.ecs.soton.ac.uk//dzsave" date="2025-12-04T07:53:46.082252-05" version="8.15.3">
   <properties>
     <property>
       <name>width</name>
@@ -39,7 +39,7 @@
     </property>
     <property>
       <name>exif-ifd0-Orientation</name>
-      <value type="VipsRefString">1 (Top-left, Short, 1 components, 2 bytes)</value>
+      <value type="VipsRefString">1 (Internal error (unknown value 1), Short, 1 components, 2 bytes)</value>
     </property>
     <property>
       <name>exif-ifd0-XResolution</name>
@@ -51,11 +51,11 @@
     </property>
     <property>
       <name>exif-ifd0-ResolutionUnit</name>
-      <value type="VipsRefString">2 (Inch, Short, 1 components, 2 bytes)</value>
+      <value type="VipsRefString">2 (Internal error (unknown value 2), Short, 1 components, 2 bytes)</value>
     </property>
     <property>
       <name>exif-ifd2-ColorSpace</name>
-      <value type="VipsRefString">1 (sRGB, Short, 1 components, 2 bytes)</value>
+      <value type="VipsRefString">1 (Internal error (unknown value 1), Short, 1 components, 2 bytes)</value>
     </property>
     <property>
       <name>exif-ifd2-PixelXDimension</name>

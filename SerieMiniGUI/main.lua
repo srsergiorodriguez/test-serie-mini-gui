@@ -20,7 +20,8 @@ Width, Height = 960, 540
 WIN_W, WIN_H = Width, Height
 
 -- Create a window
-local win = sdl.SDL_CreateWindow("Serie Mini", WIN_W, WIN_H, sdl.SDL_WINDOW_RESIZABLE)
+local win_flags = bit.bor(sdl.SDL_WINDOW_RESIZABLE, sdl.SDL_WINDOW_HIGH_PIXEL_DENSITY)
+local win = sdl.SDL_CreateWindow("Serie Mini", WIN_W, WIN_H, win_flags)
 if not win then
   error("SDL_CreateWindow failed: " .. ffi.string(sdl.SDL_GetError()))
 end
@@ -38,14 +39,6 @@ nfd.Init()
 
 -- Init App (code in App.lua)
 local app = require("app")
-
---local tex = sdl.SDL_LoadTexture(renderer, "assets/images/Kibo.png")
-
-local file_filters = {
-  { name = "Text Files", spec = "txt,lua,json" },
-  { name = "Images", spec = "png,jpg" }
-}
-
 
 local event = ffi.new("SDL_Event[1]")
 local running = true

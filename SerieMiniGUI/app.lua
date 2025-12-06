@@ -7,11 +7,15 @@ local csv = require("scripts.luaLibs.csv")
 local helpers = require("scripts.helpers")
 local sdl = require("scripts.SDL3")
 
+
+local app = {}
+local debug = ""
+local show_debug = false
+local BASE_PATH = nil
+
 -- =========================================================
 -- 1. UTILITIES
 -- =========================================================
-
-local debug = ""
 
 local function ImVec2(x, y)
   return ffi.new("ImVec2", x, y)
@@ -21,45 +25,14 @@ local function ImVec4(x, y, z, w)
   return ffi.new("ImVec4", x, y, z, w)
 end
 
--- Robust Base Path Helper
--- Returns the directory where the executable is located
-local function get_base_path()
-  local path_ptr = sdl.SDL_GetBasePath()
-  if path_ptr ~= nil then
-    local path = ffi.string(path_ptr)
-    if ffi.os == "OSX" then
-      local app_idx = path:find("/[%a%s%d]+%.app/Contents/Resources/$")
-      if app_idx then
-        path = path:sub(1, app_idx - 1) .. "/"
-      end
-
-      app_idx = path:find("/SerieMiniGUI/LuaJIT/$")
-      if app_idx then
-        path = path:sub(1, app_idx - 1) .. "/"
-      end
-    end
-    sdl.SDL_free(ffi.cast("void*", path_ptr))
-    return path
-  end
-  return "./" -- Fallback for non-bundle runs
-end
-
--- Store base path once at startup
--- local BASE_PATH = get_base_path()
-local BASE_PATH = nil
---debug = BASE_PATH
-
--- Helper to read file content (Bundle-Aware + Fallback)
+-- Helper to read file content
 local function read_file(path)
-  -- 1. Try via SDL Base Path (Standard for App Bundles -> Resources/)
+
   local abs_path = path:gsub("^%./", BASE_PATH) -- concat filename to base_path
   local f, err = io.open(abs_path, "r")
 
-  debug = tostring(err)
-  
-  -- Return nil and the path we tried if both failed
   if not f then return nil, abs_path end
-  
+
   local content = f:read("*a")
   f:close()
   return content
@@ -67,21 +40,16 @@ end
 
 -- Helper to write file content (Bundle-Aware)
 local function write_file(path, content)
-    -- Try writing to Base Path first
-    local abs_path = path:gsub("^%./", BASE_PATH)
-    local f = io.open(abs_path, "w")
-    
-    -- Fallback to relative
-    if not f then
-        f = io.open(path, "w")
-    end
-    
-    if f then
-        f:write(content)
-        f:close()
-        return true
-    end
-    return false
+  local abs_path = path:gsub("^%./", BASE_PATH)
+  local f = io.open(abs_path, "w")
+
+
+  if f then
+    f:write(content)
+    f:close()
+    return true
+  end
+  return false
 end
 
 -- Helper to uppercase first letter (for labels)
@@ -90,7 +58,7 @@ local function first_upper(str)
 end
 
 function contains(list, value)
-  for _, v in ipairs(list) do 
+  for _, v in ipairs(list) do
     if v == value then return true end
   end
   return false
@@ -100,8 +68,8 @@ end
 local function parse_js_config(content)
   -- We extract the JSON object between "{" and "};"
   local json_start = content:find("{")
-  local json_end = content:find("};") 
-  
+  local json_end = content:find("};")
+
   if json_start and json_end then
     local json_str = content:sub(json_start, json_end)
     -- decode using dkjson
@@ -119,56 +87,55 @@ local function set_char_buffer(buffer, text, size)
 end
 
 -- =========================================================
--- THEME SETUP 
+-- THEME SETUP
 -- =========================================================
 
 local style_init = false
 local function setup_theme()
-    local style = ig.GetStyle()
-    
-    -- Modern Rounding
-    style.WindowRounding = 8.0
-    style.FrameRounding = 6.0
-    style.PopupRounding = 6.0
-    style.ScrollbarRounding = 12.0
-    style.GrabRounding = 6.0
-    style.TabRounding = 6.0
-    
+  local style = ig.GetStyle()
 
-    local colors = style.Colors
-    
-    -- --- Backgrounds ---
-    colors[ig.ImGuiCol_WindowBg]         = ImVec4(0.08, 0.08, 0.11, 1.00)      -- Deep Navy/Slate (Main Background)
-    colors[ig.ImGuiCol_PopupBg]          = ImVec4(0.12, 0.12, 0.16, 0.98)      -- Slightly Lighter for Popups
-    colors[ig.ImGuiCol_FrameBg]          = ImVec4(0.30, 0.30, 0.33, 1.00)      -- Dark Gray-Blue (Input/Frame Background)
+  -- Modern Rounding
+  style.WindowRounding = 8.0
+  style.FrameRounding = 6.0
+  style.PopupRounding = 6.0
+  style.ScrollbarRounding = 12.0
+  style.GrabRounding = 6.0
+  style.TabRounding = 6.0
 
-    -- --- Text and Checkmark ---
-    colors[ig.ImGuiCol_Text]             = ImVec4(0.90, 0.92, 0.95, 1.00)      -- Off-White/Light Gray
-    colors[ig.ImGuiCol_CheckMark]        = ImVec4(0.25, 0.65, 0.95, 1.00)      -- Bright Accent Blue
-    header_color                         = ImVec4(0.30, 0.60, 0.90, 1.00)
+  local colors = style.Colors
 
-    -- --- Frame/Input States ---
-    colors[ig.ImGuiCol_FrameBgHovered]   = ImVec4(0.20, 0.20, 0.28, 1.00)      -- Darker Hover
-    colors[ig.ImGuiCol_FrameBgActive]    = ImVec4(0.25, 0.25, 0.35, 1.00)      -- Dark Blue Active
+  -- --- Backgrounds ---
+  colors[ig.ImGuiCol_WindowBg]         = ImVec4(0.08, 0.08, 0.11, 1.00)      -- Deep Navy/Slate (Main Background)
+  colors[ig.ImGuiCol_PopupBg]          = ImVec4(0.12, 0.12, 0.16, 0.98)      -- Slightly Lighter for Popups
+  colors[ig.ImGuiCol_FrameBg]          = ImVec4(0.30, 0.30, 0.33, 1.00)      -- Dark Gray-Blue (Input/Frame Background)
 
-    -- --- Title Bar ---
-    colors[ig.ImGuiCol_TitleBg]          = ImVec4(0.09, 0.09, 0.13, 1.00)      -- Slightly Darker than WindowBg
-    colors[ig.ImGuiCol_TitleBgActive]    = ImVec4(0.15, 0.15, 0.22, 1.00)      -- Dark Slate Blue
+  -- --- Text and Checkmark ---
+  colors[ig.ImGuiCol_Text]             = ImVec4(0.90, 0.92, 0.95, 1.00)      -- Off-White/Light Gray
+  colors[ig.ImGuiCol_CheckMark]        = ImVec4(0.25, 0.65, 0.95, 1.00)      -- Bright Accent Blue
+  header_color                         = ImVec4(0.30, 0.60, 0.90, 1.00)
 
-    -- --- Tabs ---
-    colors[ig.ImGuiCol_Tab]              = ImVec4(0.10, 0.10, 0.14, 1.00)      -- Background Tab
-    colors[ig.ImGuiCol_TabHovered]       = ImVec4(0.30, 0.55, 0.85, 1.00)      -- Brighter Blue Hover
-    colors[ig.ImGuiCol_TabSelected]      = ImVec4(0.25, 0.50, 0.80, 1.00)      -- Accent Blue Selected
+  -- --- Frame/Input States ---
+  colors[ig.ImGuiCol_FrameBgHovered]   = ImVec4(0.20, 0.20, 0.28, 1.00)      -- Darker Hover
+  colors[ig.ImGuiCol_FrameBgActive]    = ImVec4(0.25, 0.25, 0.35, 1.00)      -- Dark Blue Active
 
-    -- --- Buttons ---
-    colors[ig.ImGuiCol_Button]           = ImVec4(0.18, 0.45, 0.70, 1.00)      -- Primary Medium Blue
-    colors[ig.ImGuiCol_ButtonHovered]    = ImVec4(0.30, 0.60, 0.90, 1.00)      -- Lighter Blue Hover
-    colors[ig.ImGuiCol_ButtonActive]     = ImVec4(0.15, 0.40, 0.65, 1.00)      -- Darker Blue Active
+  -- --- Title Bar ---
+  colors[ig.ImGuiCol_TitleBg]          = ImVec4(0.09, 0.09, 0.13, 1.00)      -- Slightly Darker than WindowBg
+  colors[ig.ImGuiCol_TitleBgActive]    = ImVec4(0.15, 0.15, 0.22, 1.00)      -- Dark Slate Blue
 
-    -- --- Headers/Selectables ---
-    colors[ig.ImGuiCol_Header]           = ImVec4(0.18, 0.45, 0.70, 0.50)      -- Primary Blue (50% Opacity)
-    colors[ig.ImGuiCol_HeaderHovered]    = ImVec4(0.30, 0.60, 0.90, 0.80)      -- Lighter Blue Hover (80% Opacity)
-    colors[ig.ImGuiCol_HeaderActive]     = ImVec4(0.25, 0.55, 0.85, 1.00)      -- Medium Blue Active
+  -- --- Tabs ---
+  colors[ig.ImGuiCol_Tab]              = ImVec4(0.10, 0.10, 0.14, 1.00)      -- Background Tab
+  colors[ig.ImGuiCol_TabHovered]       = ImVec4(0.30, 0.55, 0.85, 1.00)      -- Brighter Blue Hover
+  colors[ig.ImGuiCol_TabSelected]      = ImVec4(0.25, 0.50, 0.80, 1.00)      -- Accent Blue Selected
+
+  -- --- Buttons ---
+  colors[ig.ImGuiCol_Button]           = ImVec4(0.18, 0.45, 0.70, 1.00)      -- Primary Medium Blue
+  colors[ig.ImGuiCol_ButtonHovered]    = ImVec4(0.30, 0.60, 0.90, 1.00)      -- Lighter Blue Hover
+  colors[ig.ImGuiCol_ButtonActive]     = ImVec4(0.15, 0.40, 0.65, 1.00)      -- Darker Blue Active
+
+  -- --- Headers/Selectables ---
+  colors[ig.ImGuiCol_Header]           = ImVec4(0.18, 0.45, 0.70, 0.50)      -- Primary Blue (50% Opacity)
+  colors[ig.ImGuiCol_HeaderHovered]    = ImVec4(0.30, 0.60, 0.90, 0.80)      -- Lighter Blue Hover (80% Opacity)
+  colors[ig.ImGuiCol_HeaderActive]     = ImVec4(0.25, 0.55, 0.85, 1.00)      -- Medium Blue Active
 end
 
 -- =========================================================
@@ -181,6 +148,8 @@ local texts = {
   es = {
     tab_config = "Configuración",
     tab_tasks = "Tareas (NPM)",
+    header_open_repo = "Para iniciar, abrir la carpeta del repositorio del proyecto",
+    btn_open_folder = "Abrir carpeta",
     header_basic = "Información Básica",
     header_meta = "Metadatos",
     lbl_username = "Usuario GitHub",
@@ -207,7 +176,7 @@ local texts = {
     console_title = "Consola de Salida",
     console_waiting = "Esperando comandos...",
     console_running = "> Ejecutando ",
-    console_start_server = "> Iniciando servidor de desarrollo...",
+    console_start_server = "> Iniciando servidor de previsualización...",
     console_stopping = "> Intentando detener servidor...",
     console_stopped = "> Servidor detenido.",
     console_stop_fail = "> No se pudo detener (o no estaba corriendo)."
@@ -217,6 +186,8 @@ local texts = {
     tab_tasks = "Tasks (NPM)",
     header_basic = "Basic Information",
     header_meta = "Metadata",
+    header_open_repo = "Open the folder of the Serie Mini repository",
+    btn_open_folder = "Open folder",
     lbl_username = "GitHub Username",
     lbl_repo = "Repository Name",
     lbl_title = "Collection Title",
@@ -241,7 +212,7 @@ local texts = {
     console_title = "Output Console",
     console_waiting = "Waiting for commands...",
     console_running = "> Running ",
-    console_start_server = "> Starting dev server...",
+    console_start_server = "> Starting preview server...",
     console_stopping = "> Stopping server...",
     console_stopped = "> Server stopped.",
     console_stop_fail = "> Could not stop (or not running)."
@@ -252,7 +223,6 @@ local texts = {
 -- 3. APP STATE
 -- =========================================================
 
-local app = {}
 local buf_size = 256
 
 -- Form State
@@ -270,9 +240,9 @@ local item_types = {"text", "link", "ref", "video", "audio", "youtube"}
 
 -- Metadata State
 local available_keys = {}
-local checked_show = {}  
+local checked_show = {}
 local type_show = {}
-local checked_index = {} 
+local checked_index = {}
 
 -- UI State
 local status_msg = ""
@@ -295,26 +265,26 @@ local function run_async_task(cmd_str)
   -- Reset console
   log_lines = {texts[lang].console_running .. cmd_str}
   log_file_pos = 0
-  
+
   -- Create/Clear the log file using bundle-aware path
   if not write_file(log_filename, "...\n") then
       table.insert(log_lines, "> Error: Cannot write log file.")
       return
   end
-  
+
   -- Resolve absolute path for the log file for the shell command
   local abs_log_path = BASE_PATH .. log_filename
-  
+
   -- Fix path for 'npm' on Mac/Linux GUI apps
   -- GUI apps don't inherit $PATH, so we must explicitly add common bin locations
   local path_fix = ""
   if ffi.os ~= "Windows" then
       path_fix = "export PATH=$PATH:/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin && "
   end
-  
+
   -- Construct command based on OS
   local full_cmd = ""
-  
+
   if ffi.os == "Windows" then
     -- 'start /min' runs cmd in a minimized window
     full_cmd = 'start /min cmd /c "' .. cmd_str .. ' > "' .. abs_log_path .. '" 2>&1"'
@@ -323,7 +293,7 @@ local function run_async_task(cmd_str)
     -- then run command with fixed PATH and redirect output
     full_cmd = 'cd "' .. BASE_PATH .. '" && ' .. path_fix .. cmd_str .. ' > "' .. abs_log_path .. '" 2>&1 &'
   end
-  
+
   os.execute(full_cmd)
 end
 
@@ -335,12 +305,12 @@ local function stop_server_task()
   else
     kill_cmd = "pkill node"
   end
-  
+
   table.insert(log_lines, texts[lang].console_stopping)
   auto_scroll = true
-  
+
   local result = os.execute(kill_cmd)
-  
+
   if result then
      table.insert(log_lines, texts[lang].console_stopped)
   else
@@ -352,28 +322,36 @@ function app.Load()
 
   -- 1. Load CSV (Metadata structure)
   -- Updated to capture error path for debugging
-  local content, err_path = read_file("./metadata.csv")
+  local content, err_path = read_file("./data/metadata.csv")
 
   if content then
+    local valid = true
     local parsed = csv.openstring(content)
+    
     local iter = parsed:lines()
     local headers = iter() -- Get first row
 
     local has_pid = contains(headers, "pid");
     local has_label = contains(headers, "label");
 
+    -- Metadata verifications
     if not has_pid then
       status_msg = texts[lang].err_pid
-      status_color = { 1, 0, 0, 1 }
-      csv_loaded = false
-      return
+      valid = false
     elseif not has_label then
       status_msg = texts[lang].err_label
+      valid = false
+    end
+    -- Check also for
+    -- non unique pids
+    -- empty metadata table
+
+    if not valid then
       status_color = { 1, 0, 0, 1 }
       csv_loaded = false
       return
     end
-  
+
     if headers then
       available_keys = {}
       for _, h in ipairs(headers) do
@@ -394,22 +372,22 @@ function app.Load()
   end
 
   -- 2. Try to load existing configuration
-  local existing_config_str = read_file("./serie.config.js")
+  local existing_config_str = read_file("./data/serie.config.js")
   if existing_config_str then
     local loaded_config = parse_js_config(existing_config_str)
-    
+
     if loaded_config then
       -- Set Language
-      if loaded_config.lang == "en" then lang = "en" else lang = "es" end
-      
+      loaded_config.lang = lang
+
       -- Helper to extract username from base URL
       local base = loaded_config.base or ""
       local uname = base:match("https://(.-)%.github%.io")
-      
+
       -- Helper to extract repo from baseurl
       local baseurl = loaded_config.baseurl or ""
       local repo_name = baseurl:match("^/(.+)")
-      
+
       -- Populate Form State
       set_char_buffer(state.username, uname or "", buf_size)
       set_char_buffer(state.repo, repo_name or "serie-mini", buf_size)
@@ -417,7 +395,7 @@ function app.Load()
       set_char_buffer(state.subtitle, loaded_config.subtitle, buf_size)
       set_char_buffer(state.credits, loaded_config.credits, buf_size)
       set_char_buffer(state.copyright, loaded_config.copyright, buf_size)
-      
+
       -- Populate Metadata Settings
       if loaded_config.pages then
         -- Restore "Show" settings
@@ -429,7 +407,7 @@ function app.Load()
             end
           end
         end
-        
+
         -- Restore "Index" settings
         if loaded_config.pages.metadataToIndex then
           for _, key in ipairs(loaded_config.pages.metadataToIndex) do
@@ -437,7 +415,7 @@ function app.Load()
           end
         end
       end
-      
+
       status_msg = texts[lang].msg_loaded
       status_color = { 0, 1, 0, 1 }
     end
@@ -450,17 +428,17 @@ function app.Update(dt)
     log_timer = log_timer + dt
     if log_timer > 0.1 then
       log_timer = 0
-      
+
       -- Use Bundle-Aware read for the log
       local f = io.open(BASE_PATH .. log_filename, "r")
-      
+
       -- Fallback read if base path fails
       if not f then f = io.open(log_filename, "r") end
 
       if f then
         f:seek("set", log_file_pos)
         local new_content = f:read("*a")
-        
+
         if new_content and #new_content > 0 then
           log_file_pos = f:seek()
           for line in new_content:gmatch("[^\r\n]+") do
@@ -477,23 +455,7 @@ end
 
 function mainGUI()
   local t = texts[lang]
-  local io_gui = ig.GetIO()
-
-  ig.SetNextWindowPos(ImVec2(0, 0))
-  ig.SetNextWindowSize(io_gui.DisplaySize)
-  ig.Begin("Serie Mini Setup", nil, bit.bor(ig.ImGuiWindowFlags_NoDecoration, ig.ImGuiWindowFlags_NoMove))
-
-  ig.Text(debug)
-
-  ig.Text("Serie Mini")
-  ig.SameLine()
-
   local avail_w = ig.GetContentRegionAvail().x
-  ig.SetCursorPosX(avail_w - 150)
-  if ig.Button(lang == "es" and "Idioma: Español" or "Language: English") then
-    lang = (lang == "es") and "en" or "es"
-  end
-  ig.Separator()
 
   if status_msg ~= "" then
     ig.TextColored(ImVec4(unpack(status_color)), status_msg)
@@ -530,7 +492,7 @@ function mainGUI()
           if ig.Checkbox(key .. "##show", b) then
             checked_show[key] = b[0]
           end
-          
+
           if b[0] then
             ig.SameLine()
             ig.PushItemWidth(100)
@@ -600,7 +562,7 @@ function mainGUI()
           local file_content = "const config = " .. json_output .. ";\n\nexport default config;"
 
           -- Use Bundle-Aware write
-          if write_file("./serie.config.js", file_content) then
+          if write_file("./data/serie.config.js", file_content) then
             status_msg = t.msg_saved
             status_color = { 0, 1, 0, 1 }
           else
@@ -636,7 +598,7 @@ function mainGUI()
       end
 
       ig.Spacing()
-      
+
       local inner_w = ig.GetContentRegionAvail().x
       local half_w = inner_w * 0.5 - 5
 
@@ -645,18 +607,18 @@ function mainGUI()
       if ig.Button(t.btn_preview, ImVec2(half_w, 0)) then
         table.insert(log_lines, texts[lang].console_start_server)
         auto_scroll = true
-        
+
         if ffi.os == "Windows" then
-           os.execute("start /min npm run preview")
+          os.execute("start /min npm run preview")
         else
-           -- Use async task so environment variables are set correctly
-           run_async_task("npm run preview") 
+          -- Use async task so environment variables are set correctly
+          run_async_task("npm run preview")
         end
       end
       ig.PopStyleColor()
-      
+
       ig.SameLine()
-      
+
       ig.PushStyleColor_Vec4(ig.ImGuiCol_Button, ImVec4(0.8, 0.2, 0.2, 1)) -- Red for Stop
       if ig.Button(t.btn_stop, ImVec2(half_w, 0)) then
         stop_server_task()
@@ -668,31 +630,31 @@ function mainGUI()
       if ig.Button(t.btn_build, ImVec2(-1, 0)) then
         run_async_task("npm run build")
       end
-      
+
       ig.Spacing()
       ig.Separator()
       ig.Spacing()
 
       -- CONSOLE WINDOW
       ig.Text(t.console_title)
-      
+
       ig.PushStyleColor_Vec4(ig.ImGuiCol_ChildBg, ImVec4(0.1, 0.1, 0.1, 1))
       -- Use user's specific binding: BeginChild_Str
       if ig.BeginChild_Str("Console", ImVec2(0, -1), true, 0) then
-          
+
           if #log_lines == 0 then
               ig.TextDisabled(t.console_waiting)
           else
               for i, line in ipairs(log_lines) do
                   ig.TextUnformatted(line)
               end
-              
+
               if auto_scroll then
                   ig.SetScrollHereY(1.0)
                   auto_scroll = false
               end
           end
-          
+
       end
       ig.EndChild()
       ig.PopStyleColor()
@@ -702,31 +664,24 @@ function mainGUI()
 
     ig.EndTabBar()
   end
-
-  ig.Text("v1.0.0 - Sergio R. G. - 2025")
-  ig.End()
 end
 
 function loadGUI()
   local t = texts[lang]
-  local io_gui = ig.GetIO()
 
-  ig.SetNextWindowPos(ImVec2(0, 0))
-  ig.SetNextWindowSize(io_gui.DisplaySize)
-  ig.Begin("Serie Mini Setup", nil, bit.bor(ig.ImGuiWindowFlags_NoDecoration, ig.ImGuiWindowFlags_NoMove))
+  ig.Text(t.header_open_repo)
 
-  ig.Text("Select the data file of the project")
-
-  if ig.Button("Open File") then
+  if ig.Button(t.btn_open_folder) then
     local path = nfd.pickFolder(nil)
     if path then
-      print("Selected File: " .. path)
-      BASE_PATH = path.."/"
+      if path:match("/$") ~= nil then
+        BASE_PATH = path
+      else
+        BASE_PATH = path.."/"
+      end
       app.Load()
     end
   end
-
-  ig.End()
 end
 
 function app.Draw()
@@ -735,29 +690,35 @@ function app.Draw()
       style_init = true
   end
 
+  local io_gui = ig.GetIO()
+
+  ig.SetNextWindowPos(ImVec2(0, 0))
+  ig.SetNextWindowSize(io_gui.DisplaySize)
+  ig.Begin("Serie Mini Setup", nil, bit.bor(ig.ImGuiWindowFlags_NoDecoration, ig.ImGuiWindowFlags_NoMove))
+
+  if show_debug then
+    ig.Text(debug)
+  end
+
+  ig.Text("Serie Mini")
+  ig.SameLine()
+
+  local avail_w = ig.GetContentRegionAvail().x
+  ig.SetCursorPosX(avail_w - 150)
+  if ig.Button(lang == "es" and "Idioma: Español" or "Language: English") then
+    lang = (lang == "es") and "en" or "es"
+  end
+  ig.Separator()
+
   if BASE_PATH then
     mainGUI()
   else
     loadGUI()
   end
-  
+
+  ig.Separator()
+  ig.Text("v1.0.0 - Sergio R. G. - 2025")
+  ig.End()
 end
 
---app.Load()
 return app
-
--- if ig.Button(t.btn_locate, ImVec2(avail_w, 50)) then
---   -- Open Native Folder Picker
---   local result, path = nfd.pickFolder(BASE_PATH)
---   if result then
---     if path:sub(-1) ~= "/" and path:sub(-1) ~= "\\" then
---         path = path .. "/"
---     end
---     -- UPDATE GLOBAL BASE PATH FOR EVERYTHING (including NPM)
---     BASE_PATH = path
-    
---     -- Reset error flag and try to reload
---     permission_error = false
---     app.Load()
---   end
--- end

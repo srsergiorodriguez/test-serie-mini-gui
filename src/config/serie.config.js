@@ -1,21 +1,29 @@
 const config = {
-  "baseurl":"/serie-mini",
   "subtitle":"Un sistema para mini colecciones digitales",
-  "credits":"Por ...",
+  "credits":"Por Sergio Rodríguez Gómez",
   "copyright":"Todos los derechos reservados, 2025",
   "title":"Serie Mini",
+  "lang":"es",
+  "base":"https://srsergiorodriguez.github.io",
   "pages":{
     "metadataToIndex":["label"],
     "iiifViewer":true,
     "metadataToShow":[{
         "key":"label",
-        "type":"text",
-        "label":"Label"
+        "label":"Label",
+        "type":"text"
+      },{
+        "key":"autor",
+        "label":"Autor",
+        "type":"text"
+      },{
+        "key":"fecha",
+        "label":"Fecha",
+        "type":"text"
       }]
   },
-  "lang":"es",
   "localPort":"5173",
-  "base":"https://.github.io"
+  "baseurl":"/test-serie-mini-gui"
 };
 
 export default config;

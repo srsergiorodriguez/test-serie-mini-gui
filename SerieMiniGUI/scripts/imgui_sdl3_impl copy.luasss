@@ -1,0 +1,360 @@
+-- imgui_sdl3_impl.lua
+local ffi = require("ffi")
+local sdl = require("scripts.SDL3")
+local imgui = require("scripts.cimgui")
+
+local M = {}
+
+local g_Renderer = nil
+local g_Window = nil
+local g_FontTexture = nil
+local g_Time = 0
+
+-- Helper to map SDL mouse buttons to ImGui
+local function get_mouse_button_index(sdl_button)
+    if sdl_button == 1 then return 0 end -- Left
+    if sdl_button == 3 then return 1 end -- Right
+    if sdl_button == 2 then return 2 end -- Middle
+    return 0
+end
+
+function M.Init(renderer, window)
+    local C = imgui.C 
+    if not C then C = imgui end 
+
+    -- Create Context
+    if imgui.GetCurrentContext() == nil then
+        imgui.CreateContext(nil)
+    end
+
+    g_Renderer = renderer
+    g_Window = window
+    local io = imgui.GetIO()
+
+    -- Config
+    io.BackendFlags = bit.bor(io.BackendFlags, imgui.ImGuiBackendFlags_HasMouseCursors)
+    io.BackendFlags = bit.bor(io.BackendFlags, imgui.ImGuiBackendFlags_RendererHasVtxOffset)
+
+    -- Scale fix
+    local scale = sdl.SDL_GetWindowDisplayScale(g_Window)
+    if scale <= 0 then scale = 1.0 end
+    local base_font_size = 18.0
+    local font_size = scale * base_font_size
+
+    -- FORCE ADD DEFAULT FONT
+    -- Note: Passing nil for font_cfg
+    -- C.ImFontAtlas_AddFontDefault(io.Fonts, nil)
+
+    local font_config = imgui.ImFontConfig()
+    font_config.PixelSnapH = true
+    font_config.OversampleH = 2
+    font_config.OversampleV = 2
+    --font_config.RasterizerDensity = 1.5
+
+    local newfont = io.Fonts:AddFontFromFileTTF("assets/fonts/RobotoMono-Regular.ttf", font_size, font_config)
+
+    if newfont == nil then 
+        C.ImFontAtlas_AddFontDefault(io.Fonts, nil) 
+    else
+        io.FontDefault = newfont
+    end
+
+    -- We loaded the font 2x big, so we scale the UI logic down by 0.5x 
+    -- to keep the window layout looking normal.
+    io.FontGlobalScale = 1.0 / scale
+
+    -- FORCE BUILD ATLAS
+    local pixels = ffi.new("unsigned char*[1]")
+    local width = ffi.new("int[1]")
+    local height = ffi.new("int[1]")
+    local bytes_per_pixel = ffi.new("int[1]")
+
+    C.ImFontAtlas_GetTexDataAsRGBA32(io.Fonts, pixels, width, height, bytes_per_pixel)
+
+    -- Create SDL Texture
+    -- Use raw integer for RGBA32 (0x16762004) to avoid missing constant issues
+    local format_rgba32 = 376840196 
+    
+    g_FontTexture = sdl.SDL_CreateTexture(
+        g_Renderer,
+        format_rgba32,
+        sdl.SDL_TEXTUREACCESS_STATIC,
+        width[0],
+        height[0]
+    )
+
+    -- Upload Pixels
+    sdl.SDL_UpdateTexture(g_FontTexture, ffi.NULL, pixels[0], width[0] * 4)
+    sdl.SDL_SetTextureBlendMode(g_FontTexture, sdl.SDL_BLENDMODE_BLEND)
+    io.Fonts.TexID = ffi.cast("uint64_t", ffi.cast("uintptr_t", g_FontTexture))
+end
+
+-- Key Scancodes mapping
+local KeyMap = {
+    [sdl.SDL_SCANCODE_TAB]       = imgui.ImGuiKey_Tab,
+    [sdl.SDL_SCANCODE_LEFT]      = imgui.ImGuiKey_LeftArrow,
+    [sdl.SDL_SCANCODE_RIGHT]     = imgui.ImGuiKey_RightArrow,
+    [sdl.SDL_SCANCODE_UP]        = imgui.ImGuiKey_UpArrow,
+    [sdl.SDL_SCANCODE_DOWN]      = imgui.ImGuiKey_DownArrow,
+    [sdl.SDL_SCANCODE_PAGEUP]    = imgui.ImGuiKey_PageUp,
+    [sdl.SDL_SCANCODE_PAGEDOWN]  = imgui.ImGuiKey_PageDown,
+    [sdl.SDL_SCANCODE_HOME]      = imgui.ImGuiKey_Home,
+    [sdl.SDL_SCANCODE_END]       = imgui.ImGuiKey_End,
+    [sdl.SDL_SCANCODE_INSERT]    = imgui.ImGuiKey_Insert,
+    [sdl.SDL_SCANCODE_DELETE]    = imgui.ImGuiKey_Delete,
+    [sdl.SDL_SCANCODE_BACKSPACE] = imgui.ImGuiKey_Backspace,
+    [sdl.SDL_SCANCODE_SPACE]     = imgui.ImGuiKey_Space,
+    [sdl.SDL_SCANCODE_RETURN]    = imgui.ImGuiKey_Enter,
+    [sdl.SDL_SCANCODE_ESCAPE]    = imgui.ImGuiKey_Escape,
+    [sdl.SDL_SCANCODE_APOSTROPHE]= imgui.ImGuiKey_Apostrophe,
+    [sdl.SDL_SCANCODE_COMMA]     = imgui.ImGuiKey_Comma,
+    [sdl.SDL_SCANCODE_MINUS]     = imgui.ImGuiKey_Minus,
+    [sdl.SDL_SCANCODE_PERIOD]    = imgui.ImGuiKey_Period,
+    [sdl.SDL_SCANCODE_SLASH]     = imgui.ImGuiKey_Slash,
+    [sdl.SDL_SCANCODE_SEMICOLON] = imgui.ImGuiKey_Semicolon,
+    [sdl.SDL_SCANCODE_EQUALS]    = imgui.ImGuiKey_Equal,
+    [sdl.SDL_SCANCODE_LEFTBRACKET]= imgui.ImGuiKey_LeftBracket,
+    [sdl.SDL_SCANCODE_BACKSLASH] = imgui.ImGuiKey_Backslash,
+    [sdl.SDL_SCANCODE_RIGHTBRACKET]= imgui.ImGuiKey_RightBracket,
+    [sdl.SDL_SCANCODE_GRAVE]     = imgui.ImGuiKey_GraveAccent,
+    [sdl.SDL_SCANCODE_CAPSLOCK]  = imgui.ImGuiKey_CapsLock,
+    [sdl.SDL_SCANCODE_SCROLLLOCK]= imgui.ImGuiKey_ScrollLock,
+    [sdl.SDL_SCANCODE_NUMLOCKCLEAR]= imgui.ImGuiKey_NumLock,
+    [sdl.SDL_SCANCODE_PRINTSCREEN]= imgui.ImGuiKey_PrintScreen,
+    [sdl.SDL_SCANCODE_PAUSE]     = imgui.ImGuiKey_Pause,
+    [sdl.SDL_SCANCODE_KP_0]      = imgui.ImGuiKey_Keypad0,
+    [sdl.SDL_SCANCODE_KP_1]      = imgui.ImGuiKey_Keypad1,
+    [sdl.SDL_SCANCODE_KP_2]      = imgui.ImGuiKey_Keypad2,
+    [sdl.SDL_SCANCODE_KP_3]      = imgui.ImGuiKey_Keypad3,
+    [sdl.SDL_SCANCODE_KP_4]      = imgui.ImGuiKey_Keypad4,
+    [sdl.SDL_SCANCODE_KP_5]      = imgui.ImGuiKey_Keypad5,
+    [sdl.SDL_SCANCODE_KP_6]      = imgui.ImGuiKey_Keypad6,
+    [sdl.SDL_SCANCODE_KP_7]      = imgui.ImGuiKey_Keypad7,
+    [sdl.SDL_SCANCODE_KP_8]      = imgui.ImGuiKey_Keypad8,
+    [sdl.SDL_SCANCODE_KP_9]      = imgui.ImGuiKey_Keypad9,
+    [sdl.SDL_SCANCODE_KP_PERIOD] = imgui.ImGuiKey_KeypadDecimal,
+    [sdl.SDL_SCANCODE_KP_DIVIDE] = imgui.ImGuiKey_KeypadDivide,
+    [sdl.SDL_SCANCODE_KP_MULTIPLY]= imgui.ImGuiKey_KeypadMultiply,
+    [sdl.SDL_SCANCODE_KP_MINUS]  = imgui.ImGuiKey_KeypadSubtract,
+    [sdl.SDL_SCANCODE_KP_PLUS]   = imgui.ImGuiKey_KeypadAdd,
+    [sdl.SDL_SCANCODE_KP_ENTER]  = imgui.ImGuiKey_KeypadEnter,
+    [sdl.SDL_SCANCODE_KP_EQUALS] = imgui.ImGuiKey_KeypadEqual,
+    [sdl.SDL_SCANCODE_LCTRL]     = imgui.ImGuiKey_LeftCtrl,
+    [sdl.SDL_SCANCODE_LSHIFT]    = imgui.ImGuiKey_LeftShift,
+    [sdl.SDL_SCANCODE_LALT]      = imgui.ImGuiKey_LeftAlt,
+    [sdl.SDL_SCANCODE_LGUI]      = imgui.ImGuiKey_LeftSuper,
+    [sdl.SDL_SCANCODE_RCTRL]     = imgui.ImGuiKey_RightCtrl,
+    [sdl.SDL_SCANCODE_RSHIFT]    = imgui.ImGuiKey_RightShift,
+    [sdl.SDL_SCANCODE_RALT]      = imgui.ImGuiKey_RightAlt,
+    [sdl.SDL_SCANCODE_RGUI]      = imgui.ImGuiKey_RightSuper,
+    [sdl.SDL_SCANCODE_APPLICATION]= imgui.ImGuiKey_Menu,
+}
+
+-- Map A-Z and 0-9 programmatically to save space
+for i = 0, 9 do KeyMap[sdl.SDL_SCANCODE_1 + i - 1] = imgui.ImGuiKey_1 + i end -- Note: SDL_SCANCODE_1 starts sequence
+KeyMap[sdl.SDL_SCANCODE_0] = imgui.ImGuiKey_0
+for i = 0, 25 do KeyMap[sdl.SDL_SCANCODE_A + i] = imgui.ImGuiKey_A + i end
+
+local function UpdateKeyModifiers(io)
+    local mod_state = sdl.SDL_GetModState()
+    io:AddKeyEvent(imgui.ImGuiMod_Ctrl,  bit.band(mod_state, sdl.SDL_KMOD_CTRL) ~= 0)
+    io:AddKeyEvent(imgui.ImGuiMod_Shift, bit.band(mod_state, sdl.SDL_KMOD_SHIFT) ~= 0)
+    io:AddKeyEvent(imgui.ImGuiMod_Alt,   bit.band(mod_state, sdl.SDL_KMOD_ALT) ~= 0)
+    io:AddKeyEvent(imgui.ImGuiMod_Super, bit.band(mod_state, sdl.SDL_KMOD_GUI) ~= 0)
+end
+
+function M.ProcessEvent(event)
+    local io = imgui.GetIO()
+    local type = event.type
+
+    if type == sdl.SDL_EVENT_MOUSE_MOTION then
+        local ev = ffi.cast("SDL_MouseMotionEvent*", event)
+        io:AddMousePosEvent(ev.x, ev.y)
+        return true
+
+    elseif type == sdl.SDL_EVENT_MOUSE_BUTTON_DOWN or type == sdl.SDL_EVENT_MOUSE_BUTTON_UP then
+        local ev = ffi.cast("SDL_MouseButtonEvent*", event)
+        local btn_idx = get_mouse_button_index(ev.button)
+        io:AddMouseButtonEvent(btn_idx, type == sdl.SDL_EVENT_MOUSE_BUTTON_DOWN)
+        return true
+
+    elseif type == sdl.SDL_EVENT_MOUSE_WHEEL then
+        local ev = ffi.cast("SDL_MouseWheelEvent*", event)
+        io:AddMouseWheelEvent(ev.x, ev.y)
+        return true
+
+    -- HANDLE KEYS
+    elseif type == sdl.SDL_EVENT_KEY_DOWN or type == sdl.SDL_EVENT_KEY_UP then
+        local ev = ffi.cast("SDL_KeyboardEvent*", event)
+        UpdateKeyModifiers(io)
+
+        local scancode_num = tonumber(ev.scancode)
+
+        local imgui_key = KeyMap[scancode_num]
+        
+        if imgui_key then
+            io:AddKeyEvent(imgui_key, type == sdl.SDL_EVENT_KEY_DOWN)
+        end
+        return true
+
+    -- HANDLE TEXT INPUT
+    elseif type == sdl.SDL_EVENT_TEXT_INPUT then
+        local ev = ffi.cast("SDL_TextInputEvent*", event)
+        io:AddInputCharactersUTF8(ev.text)
+        return true
+    end
+    
+    return false
+end
+
+function M.NewFrame()
+    local io = imgui.GetIO()
+
+    -- 1. Get Logical Window Size (Screen Points)
+    local w_log, h_log = ffi.new("int[1]"), ffi.new("int[1]")
+    sdl.SDL_GetWindowSize(g_Window, w_log, h_log)
+    
+    -- 2. Get Physical Buffer Size (Actual Pixels)
+    local w_phy, h_phy = ffi.new("int[1]"), ffi.new("int[1]")
+    sdl.SDL_GetRenderOutputSize(g_Renderer, w_phy, h_phy)
+
+    -- 3. Set Display Size to Logical
+    io.DisplaySize.x = w_log[0]
+    io.DisplaySize.y = h_log[0]
+
+    -- 4. Set Scale (Physical / Logical)
+    -- On Mac Retina, this will usually be 2.0
+    -- if w_log[0] > 0 and h_log[0] > 0 then
+    --     local scale_x = w_phy[0] / w_log[0]
+    --     local scale_y = h_phy[0] / h_log[0]
+    --     io.DisplayFramebufferScale.x = scale_x
+    --     io.DisplayFramebufferScale.y = scale_y
+    -- end
+    io.DisplayFramebufferScale.x = 1.0
+    io.DisplayFramebufferScale.y = 1.0
+
+
+    -- 5. Delta Time
+    local current_time = sdl.SDL_GetTicks()
+    local dt = (current_time - g_Time) / 1000.0
+    if dt <= 0 then dt = 1.0/60.0 end
+    io.DeltaTime = dt
+    g_Time = current_time
+
+    imgui.NewFrame()
+end
+
+-- Add these variables at the top of your file (inside the module)
+local g_ColorBuffer = nil
+local g_ColorBufferSize = 0
+local SDL_FColor_t = ffi.typeof("SDL_FColor")
+
+function M.Render()
+    imgui.Render()
+    local draw_data = imgui.GetDrawData()
+
+    -- Avoid rendering when minimized
+    if draw_data.DisplaySize.x <= 0 or draw_data.DisplaySize.y <= 0 then return end
+
+    -- Iterate Command Lists
+    for n = 0, tonumber(draw_data.CmdListsCount) - 1 do
+        local cmd_list = draw_data.CmdLists.Data[n]
+        local vtx_buffer = cmd_list.VtxBuffer.Data
+        local idx_buffer = cmd_list.IdxBuffer.Data
+        local total_vtx_count = cmd_list.VtxBuffer.Size
+
+        -- 1. Resize Color Conversion Buffer if needed
+        -- We need enough space for all vertices in this command list
+        if total_vtx_count > g_ColorBufferSize then
+            g_ColorBufferSize = total_vtx_count + 5000 -- Grow by chunk
+            g_ColorBuffer = ffi.new("SDL_FColor[?]", g_ColorBufferSize)
+        end
+
+        -- 2. Convert ImGui Colors (Packed Bytes) -> SDL Colors (Floats)
+        -- ImGui is 0xAABBGGRR (little endian). SDL_FColor is R, G, B, A (0.0 - 1.0)
+        for i = 0, tonumber(total_vtx_count) - 1 do
+            local col = vtx_buffer[i].col
+            local dest = g_ColorBuffer[i]
+            
+            -- Extract bytes and normalize to 0.0-1.0
+            dest.r = bit.band(col, 0xFF) / 255.0
+            dest.g = bit.band(bit.rshift(col, 8), 0xFF) / 255.0
+            dest.b = bit.band(bit.rshift(col, 16), 0xFF) / 255.0
+            dest.a = bit.band(bit.rshift(col, 24), 0xFF) / 255.0
+        end
+
+        -- 3. Render Commands
+        for cmd_i = 0, tonumber(cmd_list.CmdBuffer.Size) - 1 do
+            local pcmd = cmd_list.CmdBuffer.Data[cmd_i]
+
+            if pcmd.UserCallback ~= nil then
+                -- Handle user callbacks if needed
+            else
+                -- Set Clip Rect
+                local clip_rect = pcmd.ClipRect
+                local rect = ffi.new("SDL_Rect", {
+                    x = math.floor(clip_rect.x),
+                    y = math.floor(clip_rect.y),
+                    w = math.floor(clip_rect.z - clip_rect.x),
+                    h = math.floor(clip_rect.w - clip_rect.y)
+                })
+                sdl.SDL_SetRenderClipRect(g_Renderer, rect)
+
+                -- Helper: Get Texture ID properly
+                local tex_id = ffi.cast("uintptr_t", pcmd.TextureId)
+                local texture = ffi.cast("SDL_Texture*", ffi.cast("void*", tex_id))
+
+                -- Pointers for SDL Call
+                -- We offset into the vertex buffer for Position (XY) and UVs
+                -- We offset into our CUSTOM g_ColorBuffer for Colors
+                
+                local vtx_offset_ptr = vtx_buffer + pcmd.VtxOffset
+                local col_offset_ptr = g_ColorBuffer + pcmd.VtxOffset
+                local idx_offset_ptr = idx_buffer + pcmd.IdxOffset
+
+                -- XY Pointer: Point to the 'pos' field of the ImDrawVert (offset 0)
+                local xy_ptr = ffi.cast("float*", vtx_offset_ptr)
+                
+                -- UV Pointer: Point to the 'uv' field (offset 8 bytes)
+                -- We cast to char* first to do byte addition, then back to float*
+                local uv_ptr = ffi.cast("float*", ffi.cast("char*", vtx_offset_ptr) + 8)
+
+                local num_vertices = tonumber(cmd_list.VtxBuffer.Size) - tonumber(pcmd.VtxOffset)
+                local num_indices  = tonumber(pcmd.ElemCount)
+
+
+                -- Call SDL_RenderGeometryRaw
+                sdl.SDL_RenderGeometryRaw(
+                    g_Renderer,
+                    texture,
+                    xy_ptr,                  -- XY
+                    ffi.sizeof("ImDrawVert"),-- XY Stride (Jump 20 bytes to next pos)
+                    col_offset_ptr,          -- Color (Pointer to our float buffer)
+                    ffi.sizeof("SDL_FColor"),-- Color Stride (Jump 16 bytes to next color)
+                    uv_ptr,                  -- UV
+                    ffi.sizeof("ImDrawVert"),-- UV Stride (Jump 20 bytes to next uv)
+                    num_vertices,          -- Num Vertices 
+                    idx_offset_ptr,          -- Indices
+                    num_indices,          -- Num Indices
+                    ffi.sizeof("ImDrawIdx")  -- 2 or 4 bytes
+                )
+            end
+        end
+    end
+    
+    -- Reset Clip Rect
+    sdl.SDL_SetRenderClipRect(g_Renderer, ffi.NULL)
+end
+
+function M.Shutdown()
+    -- Cleanup texture
+    if g_FontTexture ~= nil then
+        sdl.SDL_DestroyTexture(g_FontTexture)
+        g_FontTexture = nil
+    end
+    
+    -- Destroy ImGui Context
+    imgui.DestroyContext(nil)
+end
+
+return M

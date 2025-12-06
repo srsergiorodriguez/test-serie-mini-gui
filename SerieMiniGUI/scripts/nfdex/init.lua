@@ -180,3 +180,9 @@ function M.pickFolder(defaultPath)
 end
 
 return M
+
+-- EXAMPLE OF FILE FILTERS
+-- local file_filters = {
+--   { name = "Text Files", spec = "txt,lua,json" },
+--   { name = "Images", spec = "png,jpg" }
+-- }

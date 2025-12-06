@@ -1,15 +1,15 @@
 {
-  "id": "https://.github.io/serie-mini/iiif/AdriaenCollaert/manifest/page-0.json",
+  "id": "https://srsergiorodriguez.github.io/test-serie-mini-gui/iiif/AdriaenCollaert/manifest/page-0.json",
   "items": [
     {
-      "id": "https://.github.io/serie-mini/iiif/AdriaenCollaert/manifest/image-0.json",
+      "id": "https://srsergiorodriguez.github.io/test-serie-mini-gui/iiif/AdriaenCollaert/manifest/image-0.json",
       "items": [],
       "type": "Annotation",
       "@context": "http://www.w3.org/ns/anno.jsonld",
       "motivation": "painting",
-      "target": "https://.github.io/serie-mini/iiif/AdriaenCollaert/manifest/canvas-0.json",
+      "target": "https://srsergiorodriguez.github.io/test-serie-mini-gui/iiif/AdriaenCollaert/manifest/canvas-0.json",
       "body": {
-        "id": "https://.github.io/serie-mini/iiif/AdriaenCollaert/0/full/max/0/default.jpg",
+        "id": "https://srsergiorodriguez.github.io/test-serie-mini-gui/iiif/AdriaenCollaert/0/full/max/0/default.jpg",
         "type": "Image",
         "format": "image/jpeg",
         "height": 4168,

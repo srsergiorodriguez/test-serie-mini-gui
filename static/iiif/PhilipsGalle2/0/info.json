@@ -1,6 +1,6 @@
 {
   "@context": "http://iiif.io/api/image/3/context.json",
-  "id": "https://.github.io/serie-mini/iiif/PhilipsGalle2/0",
+  "id": "https://srsergiorodriguez.github.io/test-serie-mini-gui/iiif/PhilipsGalle2/0",
   "type": "ImageService3",
   "profile": "level0",
   "protocol": "http://iiif.io/api/image",
